@@ -56,17 +56,21 @@ jobs:
           $tag = "${{ steps.release.outputs.tag }}"
           $portable = "${{ steps.release.outputs.portable }}"
           $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
+          $version = $tag.TrimStart('v')
+          $changelog = Get-Content -Path "CHANGELOG.md" -Raw
+          $escapedVersion = [regex]::Escape("v$version")
+          $pattern = "(?ms)^##\s+$escapedVersion\s*\r?\n(.*?)(?=^##\s+v|\z)"
+          $match = [regex]::Match($changelog, $pattern)
+          if (-not $match.Success) { throw "CHANGELOG.md does not contain a section for $tag." }
+          $releaseBody = $match.Groups[1].Value.Trim()
           $notes = @(
             '## CFB 27 Team Needs',
             '',
             'Standalone portable Windows roster-planning utility for EA Sports College Football 27 dynasty saves.',
             '',
-            '### v0.1.2',
-            '- Automatically detects the currently controlled dynasty school from `Team.UserCharacter`.',
-            '- Works across dynasty teams instead of relying on FIU-specific behavior.',
-            '- Keeps manual team selection as a fallback when the save cannot expose a controlled-team reference.',
-            '- Includes team branding, roster targets, graduating-player counts, manual transfer/cut/recruit inputs, and saved per-team values.',
-            '- Release verification confirms the portable package contains no previous user data.',
+            "## $tag",
+            '',
+            $releaseBody,
             '',
             '### Download',
             '- `CFB-27-Team-Needs-Portable.zip` — extract the folder to any writable location and run `CFB 27 Team Needs.exe` from inside it.',
