@@ -12,6 +12,18 @@
   display: none !important;
 }
 
+/* The Import button already shows loading state. Only surface this bar for errors. */
+.status {
+  display: none !important;
+}
+
+.status.error {
+  display: flex !important;
+  min-height: 30px !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+
 .topbar {
   min-height: 58px !important;
   padding-top: 9px !important;
@@ -20,12 +32,6 @@
 
 .topbar h1 {
   margin: 0 !important;
-}
-
-.status {
-  min-height: 30px !important;
-  padding-top: 5px !important;
-  padding-bottom: 5px !important;
 }
 
 .summary article {
