@@ -8,6 +8,20 @@ if (started) app.quit();
 
 type WorkerRequest = { kind: 'load'; filePath: string };
 type WorkerResponse<T> = { ok: true; data: T } | { ok: false; error: string };
+type TeamBranding = { logoUrl: string; color: string; alternateColor: string; displayName: string };
+
+type EspnTeamResponse = {
+  team?: {
+    displayName?: string;
+    shortDisplayName?: string;
+    abbreviation?: string;
+    color?: string;
+    alternateColor?: string;
+    logos?: Array<{ href?: string }>;
+  };
+};
+
+const teamBrandingCache = new Map<string, TeamBranding | null>();
 
 function runSaveWorker<T>(request: WorkerRequest): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -35,13 +49,81 @@ function runSaveWorker<T>(request: WorkerRequest): Promise<T> {
   });
 }
 
+function normalizeBrandingColor(value: unknown, fallback: string): string {
+  const text = String(value ?? '').trim().replace(/^#/, '');
+  return /^[0-9a-fA-F]{6}$/.test(text) ? `#${text.toLowerCase()}` : fallback;
+}
+
+function teamBrandingCandidates(teamName: string): string[] {
+  const raw = teamName.trim().toLowerCase();
+  const compact = raw.replace(/[^a-z0-9]+/g, '');
+  const dashed = raw.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const aliases: Record<string, string[]> = {
+    fiu: ['fiu', 'florida-international'],
+    ecu: ['ecu', 'east-carolina'],
+    cal: ['cal', 'california'],
+    byu: ['byu', 'brigham-young'],
+    ucf: ['ucf', 'central-florida'],
+    usf: ['usf', 'south-florida'],
+    uab: ['uab'],
+    utep: ['utep'],
+    utsa: ['utsa'],
+    unlv: ['unlv'],
+    smu: ['smu'],
+    tcu: ['tcu'],
+    lsu: ['lsu'],
+    usc: ['usc', 'southern-california'],
+    umass: ['umass', 'massachusetts'],
+    fau: ['florida-atlantic'],
+    fsu: ['florida-state'],
+    jmu: ['james-madison'],
+    wku: ['western-kentucky'],
+    'miami-oh': ['miami-oh', 'miami-ohio'],
+  };
+  const values = [...(aliases[raw] ?? []), raw, dashed, compact];
+  return [...new Set(values.filter(Boolean))];
+}
+
+async function resolveTeamBranding(teamName: string): Promise<TeamBranding | null> {
+  const cacheKey = teamName.trim().toLowerCase();
+  if (!cacheKey) return null;
+  if (teamBrandingCache.has(cacheKey)) return teamBrandingCache.get(cacheKey) ?? null;
+
+  for (const candidate of teamBrandingCandidates(teamName)) {
+    try {
+      const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams/${encodeURIComponent(candidate)}`, {
+        signal: AbortSignal.timeout(4500),
+      });
+      if (!response.ok) continue;
+      const payload = await response.json() as EspnTeamResponse;
+      const team = payload.team;
+      const href = team?.logos?.find((logo) => typeof logo.href === 'string' && logo.href.length > 0)?.href;
+      if (!team || !href) continue;
+
+      const branding: TeamBranding = {
+        logoUrl: href.replace(/^http:/, 'https:'),
+        color: normalizeBrandingColor(team.color, '#7b3342'),
+        alternateColor: normalizeBrandingColor(team.alternateColor, '#d6b35a'),
+        displayName: String(team.displayName ?? team.shortDisplayName ?? team.abbreviation ?? teamName),
+      };
+      teamBrandingCache.set(cacheKey, branding);
+      return branding;
+    } catch {
+      // Try the next candidate. Branding is optional and must never block save import.
+    }
+  }
+
+  teamBrandingCache.set(cacheKey, null);
+  return null;
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 980,
     minHeight: 660,
-    backgroundColor: '#07131f',
+    backgroundColor: '#050505',
     title: 'CFB 27 Team Needs',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -73,6 +155,11 @@ ipcMain.handle('team-needs:choose-and-load', async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return loadSave(result.filePaths[0]);
+});
+
+ipcMain.handle('team-needs:team-branding', async (_event, teamName: unknown) => {
+  const name = String(teamName ?? '').trim();
+  return name ? resolveTeamBranding(name) : null;
 });
 
 app.whenReady().then(createWindow);
