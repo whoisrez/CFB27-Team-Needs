@@ -1,0 +1,101 @@
+:root {
+  --team-accent: #7b3342;
+  --team-accent-alt: #d6b35a;
+}
+
+.mark.has-team-logo {
+  width: 66px;
+  height: 66px;
+  border-radius: 0;
+  border-color: color-mix(in srgb, var(--team-accent) 70%, #555);
+  background: linear-gradient(145deg, #111 0%, #050505 100%);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--team-accent) 82%, transparent),
+    0 12px 30px rgba(0,0,0,.32);
+  overflow: hidden;
+}
+
+.mark.has-team-logo::after {
+  inset: 5px;
+  border-radius: 0;
+  border-color: color-mix(in srgb, var(--team-accent-alt) 24%, transparent);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+
+.team-logo-image {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,.48));
+}
+
+.team-brand-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  margin-top: 7px;
+  padding: 0 9px 0 10px;
+  border: 1px solid #292929;
+  border-left: 3px solid var(--team-accent);
+  background: #0b0b0b;
+  color: #c8c8c8;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.team-select:not(:disabled) {
+  box-shadow: inset 3px 0 0 var(--team-accent);
+}
+
+.status:not(.error) {
+  border-left-color: var(--team-accent);
+}
+
+.panel {
+  border-top-color: color-mix(in srgb, var(--team-accent) 48%, #292929);
+}
+
+.panel-head {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--team-accent) 75%, transparent);
+}
+
+.summary article:first-child {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.summary article:first-child::after {
+  background: var(--team-accent);
+}
+
+.team-summary-watermark {
+  position: absolute;
+  right: 10px;
+  top: 7px;
+  z-index: -1;
+  width: 68px;
+  height: 68px;
+  object-fit: contain;
+  opacity: .14;
+  filter: saturate(.85) contrast(1.08);
+  pointer-events: none;
+}
+
+@media (max-width: 1120px) {
+  .mark.has-team-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .team-logo-image {
+    width: 49px;
+    height: 49px;
+  }
+}
