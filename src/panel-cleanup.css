@@ -13,3 +13,20 @@
   font-size: 16px;
   line-height: 1;
 }
+
+.table-wrap {
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
+  scrollbar-width: auto;
+}
+
+.total-row {
+  position: static;
+}
+
+@media (max-width: 1150px) {
+  .table-wrap {
+    max-height: none;
+  }
+}
