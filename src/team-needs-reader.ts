@@ -60,6 +60,28 @@ function appearsUserControlled(record: FranchiseRecordLike): boolean {
   return candidates.some((key) => truthy(record[key]));
 }
 
+async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<number>> {
+  const userTeams = new Set<number>();
+  const coachTables = franchise.getAllTablesByName('Coach') ?? [];
+
+  for (const table of coachTables) {
+    try {
+      await table.readRecords(['IsUserControlled', 'TeamIndex']);
+      for (const record of nonEmpty(table.records)) {
+        if (!truthy(record.IsUserControlled)) continue;
+        const teamIndex = Number(record.TeamIndex);
+        if (Number.isFinite(teamIndex)) userTeams.add(teamIndex);
+      }
+    } catch {
+      // Some CFB 27 updates change the Coach schema. Team Needs does not depend
+      // on that table, so failure here simply falls back to Team flags and the
+      // user's remembered selection instead of making the whole import fail.
+    }
+  }
+
+  return userTeams;
+}
+
 export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsDynasty> {
   const opened = await Franchise.create(filePath);
   const franchise = opened as unknown as FranchiseLike;
@@ -68,6 +90,7 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
   const playerTable = largestTable(franchise, 'Player');
   await teamTable.readRecords();
   await playerTable.readRecords();
+  const coachUserTeams = await userControlledTeamIndices(franchise);
 
   const playersByTeam = new Map<number, TeamNeedsPlayer[]>();
   for (const record of nonEmpty(playerTable.records)) {
@@ -92,7 +115,7 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     teams.push({
       teamName: name,
       teamIndex: index,
-      isUserControlled: appearsUserControlled(record),
+      isUserControlled: appearsUserControlled(record) || coachUserTeams.has(index),
       roster,
     });
   }
