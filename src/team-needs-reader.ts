@@ -1,3 +1,4 @@
+import path from 'node:path';
 import Franchise from 'madden-franchise';
 
 export type TeamNeedsPlayer = {
@@ -48,16 +49,42 @@ function truthy(value: unknown): boolean {
   return text === 'true' || text === '1' || text === 'yes';
 }
 
+function normalizeKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 function appearsUserControlled(record: FranchiseRecordLike): boolean {
-  const candidates = [
-    'IsUserControlled',
-    'UserControlled',
-    'IsUserTeam',
-    'UserTeam',
-    'IsHumanControlled',
-    'HumanControlled',
-  ];
-  return candidates.some((key) => truthy(record[key]));
+  const exactCandidates = new Set([
+    'isusercontrolled',
+    'usercontrolled',
+    'isuserteam',
+    'userteam',
+    'ishumancontrolled',
+    'humancontrolled',
+  ]);
+
+  return Object.entries(record).some(([key, value]) => {
+    if (!truthy(value)) return false;
+    const normalized = normalizeKey(key);
+    if (exactCandidates.has(normalized)) return true;
+
+    const mentionsUser = normalized.includes('user') || normalized.includes('human');
+    const mentionsControl = normalized.includes('control') || normalized.includes('team');
+    return mentionsUser && mentionsControl;
+  });
+}
+
+function recordTeamIndex(record: FranchiseRecordLike): number | null {
+  const direct = Number(record.TeamIndex);
+  if (Number.isFinite(direct)) return direct;
+
+  for (const [key, value] of Object.entries(record)) {
+    const normalized = normalizeKey(key);
+    if (normalized !== 'teamindex' && normalized !== 'teamid') continue;
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
 }
 
 async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<number>> {
@@ -66,20 +93,28 @@ async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<
 
   for (const table of coachTables) {
     try {
-      await table.readRecords(['IsUserControlled', 'TeamIndex']);
+      // Read the record as exposed by the installed schema rather than asking for
+      // guessed field names. This makes the detector tolerant of field renames.
+      await table.readRecords();
       for (const record of nonEmpty(table.records)) {
-        if (!truthy(record.IsUserControlled)) continue;
-        const teamIndex = Number(record.TeamIndex);
-        if (Number.isFinite(teamIndex)) userTeams.add(teamIndex);
+        if (!appearsUserControlled(record)) continue;
+        const teamIndex = recordTeamIndex(record);
+        if (teamIndex != null) userTeams.add(teamIndex);
       }
     } catch {
       // Some CFB 27 updates change the Coach schema. Team Needs does not depend
-      // on that table, so failure here simply falls back to Team flags and the
-      // user's remembered selection instead of making the whole import fail.
+      // on that table, so failure here simply falls back to Team flags, save-name
+      // matching, and the user's remembered selection.
     }
   }
 
   return userTeams;
+}
+
+function saveNameMatchesTeam(filePath: string, name: string): boolean {
+  const saveName = normalizeKey(path.basename(filePath, path.extname(filePath)));
+  const normalizedTeamName = normalizeKey(name);
+  return normalizedTeamName.length >= 3 && saveName.includes(normalizedTeamName);
 }
 
 export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsDynasty> {
@@ -115,7 +150,10 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     teams.push({
       teamName: name,
       teamIndex: index,
-      isUserControlled: appearsUserControlled(record) || coachUserTeams.has(index),
+      isUserControlled:
+        appearsUserControlled(record)
+        || coachUserTeams.has(index)
+        || saveNameMatchesTeam(filePath, name),
       roster,
     });
   }
