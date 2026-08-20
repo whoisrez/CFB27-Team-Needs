@@ -10,9 +10,9 @@ First public team-agnostic Windows release.
 - Team detection no longer depends on potentially stale Coach team metadata when `Team.UserCharacter` is available.
 
 ### Changed
-- Public releases now include both `CFB-27-Team-Needs-Setup.exe` and `CFB-27-Team-Needs-Portable.zip`.
-- GitHub Actions now builds and verifies Windows release output before publishing the GitHub Release.
-- Release notes call out the unsigned Windows SmartScreen warning.
+- Public distribution remains portable-only: `CFB-27-Team-Needs-Portable.zip` is the sole application download.
+- GitHub Actions now builds and verifies the portable Windows release before publishing or updating the GitHub Release.
+- Release verification confirms the portable package contains no previous user data.
 
 ## v0.1.1
 

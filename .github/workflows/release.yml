@@ -32,11 +32,8 @@ jobs:
       - name: Typecheck
         run: npm run verify
 
-      - name: Build Windows installer
-        run: npx electron-forge make --platform=win32 --arch=x64
-
       - name: Build portable ZIP
-        run: node scripts/make-portable.cjs
+        run: npm run make
 
       - name: Verify release output
         run: npm run release:verify-output
@@ -47,26 +44,22 @@ jobs:
         run: |
           $version = node -p "require('./package.json').version"
           $tag = "v$version"
-          $setup = Get-ChildItem -Path "out\make" -Recurse -File -Filter "CFB-27-Team-Needs-Setup.exe" | Select-Object -First 1
-          if (-not $setup) { throw "Windows installer was not created." }
           $portable = Resolve-Path "out\make\portable\CFB-27-Team-Needs-Portable.zip"
           "tag=$tag" >> $env:GITHUB_OUTPUT
-          "setup=$($setup.FullName)" >> $env:GITHUB_OUTPUT
           "portable=$portable" >> $env:GITHUB_OUTPUT
 
-      - name: Publish GitHub release
+      - name: Publish portable-only GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ steps.release.outputs.tag }}"
-          $setup = "${{ steps.release.outputs.setup }}"
           $portable = "${{ steps.release.outputs.portable }}"
           $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
           $notes = @(
             '## CFB 27 Team Needs',
             '',
-            'Standalone Windows roster-planning utility for EA Sports College Football 27 dynasty saves.',
+            'Standalone portable Windows roster-planning utility for EA Sports College Football 27 dynasty saves.',
             '',
             '### v0.1.2',
             '- Automatically detects the currently controlled dynasty school from `Team.UserCharacter`.',
@@ -75,17 +68,40 @@ jobs:
             '- Includes team branding, roster targets, graduating-player counts, manual transfer/cut/recruit inputs, and saved per-team values.',
             '- Release verification confirms the portable package contains no previous user data.',
             '',
-            '### Downloads',
-            '- `CFB-27-Team-Needs-Setup.exe` — standard Windows installer.',
-            '- `CFB-27-Team-Needs-Portable.zip` — portable build; extract the folder and run `CFB 27 Team Needs.exe`.',
+            '### Download',
+            '- `CFB-27-Team-Needs-Portable.zip` — extract the folder to any writable location and run `CFB 27 Team Needs.exe` from inside it.',
             '',
+            'The app stores its persistent data beside the executable so the entire portable folder can be moved together.',
             'Windows may show a SmartScreen warning because this release is not code-signed.'
           )
           Set-Content -Path $notesPath -Value $notes -Encoding utf8
 
-          gh release create $tag $setup $portable `
-            --repo $env:GITHUB_REPOSITORY `
-            --target $env:GITHUB_SHA `
-            --title "CFB 27 Team Needs $tag" `
-            --notes-file $notesPath `
-            --latest
+          $releaseExists = $false
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
+
+          if ($releaseExists) {
+            $assets = @(gh release view $tag --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name')
+            if ($assets -contains 'CFB-27-Team-Needs-Setup.exe') {
+              gh release delete-asset $tag 'CFB-27-Team-Needs-Setup.exe' --repo $env:GITHUB_REPOSITORY --yes
+              if ($LASTEXITCODE -ne 0) { throw 'Failed to remove installer asset from release.' }
+            }
+
+            gh release upload $tag $portable --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to upload portable ZIP.' }
+
+            gh release edit $tag `
+              --repo $env:GITHUB_REPOSITORY `
+              --title "CFB 27 Team Needs $tag" `
+              --notes-file $notesPath `
+              --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to update GitHub release.' }
+          } else {
+            gh release create $tag $portable `
+              --repo $env:GITHUB_REPOSITORY `
+              --target $env:GITHUB_SHA `
+              --title "CFB 27 Team Needs $tag" `
+              --notes-file $notesPath `
+              --latest
+            if ($LASTEXITCODE -ne 0) { throw 'Failed to create GitHub release.' }
+          }
