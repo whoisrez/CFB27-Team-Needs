@@ -19,7 +19,18 @@ export type TeamNeedsDynasty = {
   teams: TeamNeedsTeam[];
 };
 
-type FranchiseRecordLike = Record<string, unknown> & { isEmpty?: boolean };
+type FranchiseReferenceFieldLike = {
+  isReference?: boolean;
+  referenceData?: {
+    tableId?: number;
+    rowNumber?: number;
+  } | null;
+};
+
+type FranchiseRecordLike = Record<string, unknown> & {
+  isEmpty?: boolean;
+  fields?: Record<string, FranchiseReferenceFieldLike>;
+};
 type FranchiseTableLike = {
   header: { recordCapacity: number };
   records: FranchiseRecordLike[];
@@ -74,6 +85,13 @@ function appearsUserControlled(record: FranchiseRecordLike): boolean {
   });
 }
 
+function hasUserCharacterReference(record: FranchiseRecordLike): boolean {
+  const field = record.fields?.UserCharacter;
+  if (!field?.isReference) return false;
+  const tableId = Number(field.referenceData?.tableId ?? 0);
+  return Number.isFinite(tableId) && tableId !== 0;
+}
+
 function recordTeamIndex(record: FranchiseRecordLike): number | null {
   const direct = Number(record.TeamIndex);
   if (Number.isFinite(direct)) return direct;
@@ -93,8 +111,8 @@ async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<
 
   for (const table of coachTables) {
     try {
-      // Read the record as exposed by the installed schema rather than asking for
-      // guessed field names. This makes the detector tolerant of field renames.
+      // This is only a compatibility fallback for saves where Team.UserCharacter
+      // is unavailable. Coach metadata can be stale after a coaching change.
       await table.readRecords();
       for (const record of nonEmpty(table.records)) {
         if (!appearsUserControlled(record)) continue;
@@ -125,7 +143,19 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
   const playerTable = largestTable(franchise, 'Player');
   await teamTable.readRecords();
   await playerTable.readRecords();
-  const coachUserTeams = await userControlledTeamIndices(franchise);
+
+  const teamRecords = nonEmpty(teamTable.records);
+  const userCharacterTeams = new Set<number>();
+  for (const record of teamRecords) {
+    const index = recordTeamIndex(record);
+    if (index != null && hasUserCharacterReference(record)) userCharacterTeams.add(index);
+  }
+
+  // Team.UserCharacter is CFB 27's authoritative current human-team signal.
+  // Only consult older heuristics when no usable UserCharacter reference exists.
+  const coachUserTeams = userCharacterTeams.size === 0
+    ? await userControlledTeamIndices(franchise)
+    : new Set<number>();
 
   const playersByTeam = new Map<number, TeamNeedsPlayer[]>();
   for (const record of nonEmpty(playerTable.records)) {
@@ -142,7 +172,7 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
   }
 
   const teams: TeamNeedsTeam[] = [];
-  for (const record of nonEmpty(teamTable.records)) {
+  for (const record of teamRecords) {
     const index = Number(record.TeamIndex);
     const name = teamName(record);
     const roster = playersByTeam.get(index) ?? [];
@@ -150,10 +180,11 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     teams.push({
       teamName: name,
       teamIndex: index,
-      isUserControlled:
-        appearsUserControlled(record)
-        || coachUserTeams.has(index)
-        || saveNameMatchesTeam(filePath, name),
+      isUserControlled: userCharacterTeams.size > 0
+        ? userCharacterTeams.has(index)
+        : appearsUserControlled(record)
+          || coachUserTeams.has(index)
+          || saveNameMatchesTeam(filePath, name),
       roster,
     });
   }
