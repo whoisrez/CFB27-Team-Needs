@@ -1,9 +1,15 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import started from 'electron-squirrel-startup';
 import type { TeamNeedsDynasty } from './team-needs-reader';
+
+if (app.isPackaged) {
+  // Portable releases keep settings, localStorage, and sync metadata beside the app
+  // instead of writing them to %LOCALAPPDATA%.
+  app.setPath('userData', path.join(path.dirname(process.execPath), 'data'));
+}
 
 if (started) app.quit();
 
@@ -31,6 +37,7 @@ function lastSavePathFile(): string {
 
 async function rememberLastSavePath(filePath: string): Promise<void> {
   try {
+    await mkdir(app.getPath('userData'), { recursive: true });
     await writeFile(lastSavePathFile(), filePath, 'utf8');
   } catch {
     // Sync convenience is optional; never fail an import because persistence failed.
