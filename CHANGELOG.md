@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.2
+
+First public team-agnostic Windows release.
+
+### Fixed
+- Controlled-school detection now uses CFB 27's `Team.UserCharacter` reference, which reliably identifies the current human-controlled school.
+- Saves that do not expose a usable controlled-team reference no longer lose all team options; the full team selector remains available as a fallback.
+- Team detection no longer depends on potentially stale Coach team metadata when `Team.UserCharacter` is available.
+
+### Changed
+- Public releases now include both `CFB-27-Team-Needs-Setup.exe` and `CFB-27-Team-Needs-Portable.zip`.
+- GitHub Actions now builds and verifies Windows release output before publishing the GitHub Release.
+- Release notes call out the unsigned Windows SmartScreen warning.
+
 ## v0.1.1
 
 Portable Windows release.
