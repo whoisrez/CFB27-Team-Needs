@@ -3,30 +3,21 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const rendererIndex = path.join(root, '.vite', 'renderer', 'main_window', 'index.html');
-const makeDir = path.join(root, 'out', 'make');
-
-function findFile(dir, fileName) {
-  if (!fs.existsSync(dir)) return null;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const nested = findFile(fullPath, fileName);
-      if (nested) return nested;
-    } else if (entry.name === fileName) {
-      return fullPath;
-    }
-  }
-  return null;
-}
+const portableExe = path.join(root, 'out', 'portable', 'CFB 27 Team Needs', 'CFB 27 Team Needs.exe');
+const portableZip = path.join(root, 'out', 'make', 'portable', 'CFB-27-Team-Needs-Portable.zip');
 
 if (!fs.existsSync(rendererIndex)) {
   throw new Error(`Release renderer is missing: ${rendererIndex}`);
 }
 
-const installer = findFile(makeDir, 'CFB-27-Team-Needs-Setup.exe');
-if (!installer) {
-  throw new Error(`Release installer is missing under: ${makeDir}`);
+if (!fs.existsSync(portableExe)) {
+  throw new Error(`Portable executable is missing: ${portableExe}`);
+}
+
+if (!fs.existsSync(portableZip)) {
+  throw new Error(`Portable ZIP is missing: ${portableZip}`);
 }
 
 console.log(`Verified renderer: ${path.relative(root, rendererIndex)}`);
-console.log(`Verified installer: ${path.relative(root, installer)}`);
+console.log(`Verified portable app: ${path.relative(root, portableExe)}`);
+console.log(`Verified portable ZIP: ${path.relative(root, portableZip)}`);
