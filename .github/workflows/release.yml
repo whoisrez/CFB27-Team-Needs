@@ -63,24 +63,25 @@ jobs:
           $setup = "${{ steps.release.outputs.setup }}"
           $portable = "${{ steps.release.outputs.portable }}"
           $notesPath = Join-Path $env:RUNNER_TEMP "release-notes.md"
-          @'
-          ## CFB 27 Team Needs
-
-          Standalone Windows roster-planning utility for EA Sports College Football 27 dynasty saves.
-
-          ### v0.1.2
-          - Automatically detects the currently controlled dynasty school from `Team.UserCharacter`.
-          - Works across dynasty teams instead of relying on FIU-specific behavior.
-          - Keeps manual team selection as a fallback when the save cannot expose a controlled-team reference.
-          - Includes team branding, roster targets, graduating-player counts, manual transfer/cut/recruit inputs, and saved per-team values.
-          - Release verification confirms the portable package contains no previous user data.
-
-          ### Downloads
-          - `CFB-27-Team-Needs-Setup.exe` — standard Windows installer.
-          - `CFB-27-Team-Needs-Portable.zip` — portable build; extract the folder and run `CFB 27 Team Needs.exe`.
-
-          Windows may show a SmartScreen warning because this release is not code-signed.
-          '@ | Set-Content -Path $notesPath -Encoding utf8
+          $notes = @(
+            '## CFB 27 Team Needs',
+            '',
+            'Standalone Windows roster-planning utility for EA Sports College Football 27 dynasty saves.',
+            '',
+            '### v0.1.2',
+            '- Automatically detects the currently controlled dynasty school from `Team.UserCharacter`.',
+            '- Works across dynasty teams instead of relying on FIU-specific behavior.',
+            '- Keeps manual team selection as a fallback when the save cannot expose a controlled-team reference.',
+            '- Includes team branding, roster targets, graduating-player counts, manual transfer/cut/recruit inputs, and saved per-team values.',
+            '- Release verification confirms the portable package contains no previous user data.',
+            '',
+            '### Downloads',
+            '- `CFB-27-Team-Needs-Setup.exe` — standard Windows installer.',
+            '- `CFB-27-Team-Needs-Portable.zip` — portable build; extract the folder and run `CFB 27 Team Needs.exe`.',
+            '',
+            'Windows may show a SmartScreen warning because this release is not code-signed.'
+          )
+          Set-Content -Path $notesPath -Value $notes -Encoding utf8
 
           gh release create $tag $setup $portable `
             --repo $env:GITHUB_REPOSITORY `
