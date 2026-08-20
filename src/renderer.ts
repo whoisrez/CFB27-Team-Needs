@@ -150,7 +150,11 @@ function renderTeamSelect(): void {
 }
 
 function updateStatus(): void {
-  if (!dynasty) return;
+  if (!dynasty) {
+    status.classList.remove('error');
+    status.innerHTML = '<span><strong>No dynasty loaded.</strong> Import a save to read team rosters.</span><span>Manual values save per team.</span>';
+    return;
+  }
   const team = currentTeam();
   if (!team) {
     status.classList.remove('error');
@@ -311,7 +315,8 @@ importButton.addEventListener('click', async () => {
     }
     dynasty = loaded;
     const userTeams = loaded.teams.filter((team) => team.isUserControlled);
-    const remembered = Number(localStorage.getItem(LAST_TEAM_KEY));
+    const rememberedRaw = localStorage.getItem(LAST_TEAM_KEY);
+    const remembered = rememberedRaw == null ? Number.NaN : Number(rememberedRaw);
     const rememberedTeam = loaded.teams.find((team) => team.teamIndex === remembered);
     selectedTeamIndex = userTeams.length === 1 ? userTeams[0].teamIndex : rememberedTeam?.teamIndex ?? null;
     renderTeamSelect();
