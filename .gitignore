@@ -2,5 +2,6 @@ node_modules/
 out/
 .vite/
 dist/
+resources/app.ico
 *.log
 .DS_Store
