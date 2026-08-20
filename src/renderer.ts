@@ -18,7 +18,7 @@ declare global {
   }
 }
 
-type ManualField = 'transferring' | 'beingCut' | 'recruited';
+type ManualField = 'transferring' | 'projectedDraft' | 'beingCut' | 'recruited';
 type ManualRow = Record<ManualField, number>;
 type ManualStore = Record<string, Record<string, ManualRow>>;
 
@@ -70,6 +70,7 @@ function manualValues(groupKey: string): ManualRow {
   const row = readStore()[storageScope()]?.[groupKey];
   return {
     transferring: clampManual(row?.transferring),
+    projectedDraft: clampManual(row?.projectedDraft),
     beingCut: clampManual(row?.beingCut),
     recruited: clampManual(row?.recruited),
   };
@@ -79,7 +80,7 @@ function saveManual(groupKey: string, field: ManualField, value: number): void {
   const store = readStore();
   const scope = storageScope();
   const scoped = store[scope] ?? {};
-  const current = scoped[groupKey] ?? { transferring: 0, beingCut: 0, recruited: 0 };
+  const current = scoped[groupKey] ?? { transferring: 0, projectedDraft: 0, beingCut: 0, recruited: 0 };
   scoped[groupKey] = { ...current, [field]: clampManual(value) };
   store[scope] = scoped;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
@@ -122,11 +123,11 @@ root.innerHTML = `
     <section class="panel">
       <div class="panel-head"><div><span class="eyebrow">85-MAN ROSTER PLAN</span><h2>Team Needs</h2></div><div id="meta" class="panel-meta">Import a dynasty to calculate needs</div></div>
       <div class="table-wrap"><table class="needs-table">
-        <thead><tr><th>Position</th><th>On Team</th><th>Graduating</th><th>Transferring</th><th>Being Cut</th><th>Target</th><th>Recruited</th><th>Still Needed</th></tr></thead>
+        <thead><tr><th>Position</th><th>On Team</th><th>Graduating</th><th>Transferring</th><th>Projected Draft</th><th>Being Cut</th><th>Target</th><th>Recruited</th><th>Still Needed</th></tr></thead>
         <tbody id="rows"></tbody>
       </table></div>
     </section>
-    <p class="footnote"><b>Roster-safe departures:</b> Transferring + Being Cut can never exceed the non-graduating players available in that position group. LG + RG count as OG, LT + RT as OT, LE + RE as EDGE, and SAM + WILL as SAM/WILL. Recruited stays manual so the utility does not need recruiting data.</p>
+    <p class="footnote"><b>Roster-safe departures:</b> Transferring + Projected Draft + Being Cut can never exceed the non-graduating players available in that position group. Use Projected Draft for draft-eligible underclassmen you expect to leave, such as juniors or redshirt sophomores. LG + RG count as OG, LT + RT as OT, LE + RE as EDGE, and SAM + WILL as SAM/WILL.</p>
   </div>`;
 
 const importButton = document.querySelector<HTMLButtonElement>('#importButton')!;
@@ -174,7 +175,7 @@ function render(): void {
       <article><span>Graduating</span><strong>—</strong><small>Projected departures</small></article>
       <article><span>Projected Returning</span><strong>—</strong><small>After departures</small></article>
       <article><span>Still Needed</span><strong>—</strong><small>Net to target</small></article>`;
-    rows.innerHTML = `<tr><td colspan="8" class="empty">${dynasty ? 'Select your school above to populate the chart.' : 'Import a CFB 27 dynasty save to populate the chart.'}</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="9" class="empty">${dynasty ? 'Select your school above to populate the chart.' : 'Import a CFB 27 dynasty save to populate the chart.'}</td></tr>`;
     meta.textContent = dynasty ? 'Select a team to calculate needs' : 'Import a dynasty to calculate needs';
     return;
   }
@@ -183,19 +184,44 @@ function render(): void {
     const players = team.roster.filter((player) => group.positions.includes(displayPosition(player.position)));
     const graduating = players.filter(isGraduatingSenior).length;
     const manual = manualValues(group.key);
-    const normalized = normalizeTeamNeedsDepartures(players.length, graduating, manual.transferring, manual.beingCut);
+    const normalized = normalizeTeamNeedsDepartures(
+      players.length,
+      graduating,
+      manual.transferring,
+      manual.projectedDraft,
+      manual.beingCut,
+    );
     const recruited = manual.recruited;
     const available = availableTeamNeedsDepartures(players.length, graduating);
-    const stillNeeded = calculateTeamNeedsStillNeeded(group.target, players.length, graduating, normalized.transferring, normalized.beingCut, recruited);
-    return { group, onTeam: players.length, graduating, transferring: normalized.transferring, beingCut: normalized.beingCut, recruited, available, stillNeeded };
+    const stillNeeded = calculateTeamNeedsStillNeeded(
+      group.target,
+      players.length,
+      graduating,
+      normalized.transferring,
+      normalized.projectedDraft,
+      normalized.beingCut,
+      recruited,
+    );
+    return {
+      group,
+      onTeam: players.length,
+      graduating,
+      transferring: normalized.transferring,
+      projectedDraft: normalized.projectedDraft,
+      beingCut: normalized.beingCut,
+      recruited,
+      available,
+      stillNeeded,
+    };
   });
 
   const totalGraduating = values.reduce((sum, row) => sum + row.graduating, 0);
   const totalTransferring = values.reduce((sum, row) => sum + row.transferring, 0);
+  const totalProjectedDraft = values.reduce((sum, row) => sum + row.projectedDraft, 0);
   const totalBeingCut = values.reduce((sum, row) => sum + row.beingCut, 0);
   const totalRecruited = values.reduce((sum, row) => sum + row.recruited, 0);
   const totalStillNeeded = values.reduce((sum, row) => sum + row.stillNeeded, 0);
-  const projectedReturning = team.roster.length - totalGraduating - totalTransferring - totalBeingCut;
+  const projectedReturning = team.roster.length - totalGraduating - totalTransferring - totalProjectedDraft - totalBeingCut;
 
   summary.innerHTML = `
     <article><span>Roster</span><strong>${team.roster.length} / ${ROSTER_TARGET_TOTAL}</strong><small>Current / target</small></article>
@@ -207,23 +233,28 @@ function render(): void {
   rows.innerHTML = values.map((row) => {
     const needClass = row.stillNeeded > 0 ? 'need-positive' : row.stillNeeded < 0 ? 'need-surplus' : 'need-balanced';
     const statusText = row.stillNeeded > 0 ? `${row.stillNeeded} to add` : row.stillNeeded < 0 ? `${Math.abs(row.stillNeeded)} over target` : 'On target';
+    const maxTransferring = Math.max(0, row.available - row.projectedDraft - row.beingCut);
+    const maxProjectedDraft = Math.max(0, row.available - row.transferring - row.beingCut);
+    const maxBeingCut = Math.max(0, row.available - row.transferring - row.projectedDraft);
     return `<tr data-target-group="${escapeHtml(row.group.key)}" data-on-team="${row.onTeam}" data-graduating="${row.graduating}" data-target="${row.group.target}">
       <td><div class="position-name"><strong>${escapeHtml(row.group.label)}</strong><small>${escapeHtml(row.group.key)}</small></div></td>
       <td><span class="count">${row.onTeam}</span></td>
       <td><span class="count departing">${row.graduating}</span></td>
-      <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="${Math.max(0, row.available - row.beingCut)}" step="1" data-manual-field="transferring" value="${row.transferring}" aria-label="${escapeHtml(row.group.key)} transferring"><small>max ${row.available} combined</small></div></td>
-      <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="${Math.max(0, row.available - row.transferring)}" step="1" data-manual-field="beingCut" value="${row.beingCut}" aria-label="${escapeHtml(row.group.key)} being cut"></div></td>
+      <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="${maxTransferring}" step="1" data-manual-field="transferring" value="${row.transferring}" aria-label="${escapeHtml(row.group.key)} transferring"><small>max ${row.available} combined</small></div></td>
+      <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="${maxProjectedDraft}" step="1" data-manual-field="projectedDraft" value="${row.projectedDraft}" aria-label="${escapeHtml(row.group.key)} projected draft"></div></td>
+      <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="${maxBeingCut}" step="1" data-manual-field="beingCut" value="${row.beingCut}" aria-label="${escapeHtml(row.group.key)} being cut"></div></td>
       <td><span class="target">${row.group.target}</span></td>
       <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="85" step="1" data-manual-field="recruited" value="${row.recruited}" aria-label="${escapeHtml(row.group.key)} recruited"></div></td>
       <td><div class="need-result"><strong class="still-needed ${needClass}">${row.stillNeeded}</strong><small>${statusText}</small></div></td>
     </tr>`;
-  }).join('') + `<tr class="total-row"><td><strong>Total</strong></td><td><strong>${team.roster.length}</strong></td><td><strong>${totalGraduating}</strong></td><td><strong id="totalTransferring">${totalTransferring}</strong></td><td><strong id="totalBeingCut">${totalBeingCut}</strong></td><td><strong>${ROSTER_TARGET_TOTAL}</strong></td><td><strong id="totalRecruited">${totalRecruited}</strong></td><td><strong id="totalNeedCell">${totalStillNeeded}</strong></td></tr>`;
+  }).join('') + `<tr class="total-row"><td><strong>Total</strong></td><td><strong>${team.roster.length}</strong></td><td><strong>${totalGraduating}</strong></td><td><strong id="totalTransferring">${totalTransferring}</strong></td><td><strong id="totalProjectedDraft">${totalProjectedDraft}</strong></td><td><strong id="totalBeingCut">${totalBeingCut}</strong></td><td><strong>${ROSTER_TARGET_TOTAL}</strong></td><td><strong id="totalRecruited">${totalRecruited}</strong></td><td><strong id="totalNeedCell">${totalStillNeeded}</strong></td></tr>`;
 }
 
 function refreshTotals(): void {
   const team = currentTeam();
   if (!team) return;
   let totalTransferring = 0;
+  let totalProjectedDraft = 0;
   let totalBeingCut = 0;
   let totalRecruited = 0;
   let totalStillNeeded = 0;
@@ -232,19 +263,31 @@ function refreshTotals(): void {
     const graduating = Number(row.dataset.graduating ?? 0);
     const target = Number(row.dataset.target ?? 0);
     const transferring = clampManual(row.querySelector<HTMLInputElement>('input[data-manual-field="transferring"]')?.value);
+    const projectedDraft = clampManual(row.querySelector<HTMLInputElement>('input[data-manual-field="projectedDraft"]')?.value);
     const beingCut = clampManual(row.querySelector<HTMLInputElement>('input[data-manual-field="beingCut"]')?.value);
     const recruited = clampManual(row.querySelector<HTMLInputElement>('input[data-manual-field="recruited"]')?.value);
-    totalTransferring += transferring;
-    totalBeingCut += beingCut;
+    const normalized = normalizeTeamNeedsDepartures(onTeam, graduating, transferring, projectedDraft, beingCut);
+    totalTransferring += normalized.transferring;
+    totalProjectedDraft += normalized.projectedDraft;
+    totalBeingCut += normalized.beingCut;
     totalRecruited += recruited;
-    totalStillNeeded += calculateTeamNeedsStillNeeded(target, onTeam, graduating, transferring, beingCut, recruited);
+    totalStillNeeded += calculateTeamNeedsStillNeeded(
+      target,
+      onTeam,
+      graduating,
+      normalized.transferring,
+      normalized.projectedDraft,
+      normalized.beingCut,
+      recruited,
+    );
   });
   const totalGraduating = team.roster.filter(isGraduatingSenior).length;
-  const projectedReturning = team.roster.length - totalGraduating - totalTransferring - totalBeingCut;
+  const projectedReturning = team.roster.length - totalGraduating - totalTransferring - totalProjectedDraft - totalBeingCut;
   document.querySelector('#projectedReturning')!.textContent = String(projectedReturning);
   document.querySelector('#totalStillNeeded')!.textContent = String(totalStillNeeded);
   document.querySelector('#recruitedSummary')!.textContent = String(totalRecruited);
   document.querySelector('#totalTransferring')!.textContent = String(totalTransferring);
+  document.querySelector('#totalProjectedDraft')!.textContent = String(totalProjectedDraft);
   document.querySelector('#totalBeingCut')!.textContent = String(totalBeingCut);
   document.querySelector('#totalRecruited')!.textContent = String(totalRecruited);
   document.querySelector('#totalNeedCell')!.textContent = String(totalStillNeeded);
@@ -258,22 +301,40 @@ function refreshRow(row: HTMLTableRowElement): void {
   const onTeam = Number(row.dataset.onTeam ?? 0);
   const graduating = Number(row.dataset.graduating ?? 0);
   const transferringInput = row.querySelector<HTMLInputElement>('input[data-manual-field="transferring"]')!;
+  const projectedDraftInput = row.querySelector<HTMLInputElement>('input[data-manual-field="projectedDraft"]')!;
   const beingCutInput = row.querySelector<HTMLInputElement>('input[data-manual-field="beingCut"]')!;
   const recruitedInput = row.querySelector<HTMLInputElement>('input[data-manual-field="recruited"]')!;
   const available = availableTeamNeedsDepartures(onTeam, graduating);
-  const normalized = normalizeTeamNeedsDepartures(onTeam, graduating, transferringInput.value, beingCutInput.value);
+  const normalized = normalizeTeamNeedsDepartures(
+    onTeam,
+    graduating,
+    transferringInput.value,
+    projectedDraftInput.value,
+    beingCutInput.value,
+  );
   const recruited = clampManual(recruitedInput.value);
 
   transferringInput.value = String(normalized.transferring);
+  projectedDraftInput.value = String(normalized.projectedDraft);
   beingCutInput.value = String(normalized.beingCut);
   recruitedInput.value = String(recruited);
-  transferringInput.max = String(Math.max(0, available - normalized.beingCut));
-  beingCutInput.max = String(Math.max(0, available - normalized.transferring));
+  transferringInput.max = String(Math.max(0, available - normalized.projectedDraft - normalized.beingCut));
+  projectedDraftInput.max = String(Math.max(0, available - normalized.transferring - normalized.beingCut));
+  beingCutInput.max = String(Math.max(0, available - normalized.transferring - normalized.projectedDraft));
   saveManual(groupKey, 'transferring', normalized.transferring);
+  saveManual(groupKey, 'projectedDraft', normalized.projectedDraft);
   saveManual(groupKey, 'beingCut', normalized.beingCut);
   saveManual(groupKey, 'recruited', recruited);
 
-  const stillNeeded = calculateTeamNeedsStillNeeded(target, onTeam, graduating, normalized.transferring, normalized.beingCut, recruited);
+  const stillNeeded = calculateTeamNeedsStillNeeded(
+    target,
+    onTeam,
+    graduating,
+    normalized.transferring,
+    normalized.projectedDraft,
+    normalized.beingCut,
+    recruited,
+  );
   const still = row.querySelector<HTMLElement>('.still-needed');
   const note = still?.nextElementSibling as HTMLElement | null;
   if (still) {

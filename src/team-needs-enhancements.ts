@@ -165,7 +165,7 @@ function ensureSectionDividers(): void {
     divider.className = 'roster-section-divider';
     divider.dataset.section = section.id;
     const cell = document.createElement('td');
-    cell.colSpan = 8;
+    cell.colSpan = 9;
     cell.textContent = section.label;
     divider.append(cell);
     body.insertBefore(divider, firstRow);
