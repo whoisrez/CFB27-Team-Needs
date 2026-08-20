@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.3
+
+Projected draft planning update.
+
+### Added
+- Added a manual `Projected Draft` column between Transferring and Being Cut.
+- Projected Draft is intended for draft-eligible underclassmen you expect to leave early, such as juniors or redshirt sophomores.
+- Projected draft values are saved per team and position group alongside the existing manual planning fields.
+
+### Changed
+- Projected Draft departures now reduce Projected Returning and increase Still Needed.
+- Transferring + Projected Draft + Being Cut share one roster-safe departure cap so projected departures cannot exceed available non-graduating players.
+- Existing saved manual values remain compatible; Projected Draft defaults to 0 when no prior value exists.
+- Public distribution remains portable-only through `CFB-27-Team-Needs-Portable.zip`.
+
 ## v0.1.2
 
 First public team-agnostic Windows release.
