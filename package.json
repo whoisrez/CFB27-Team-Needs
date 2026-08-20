@@ -6,10 +6,9 @@
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
-    "prepare:assets": "node scripts/prepare-release-assets.cjs",
-    "start": "npm run prepare:assets && electron-forge start",
-    "package": "npm run prepare:assets && electron-forge package",
-    "make": "npm run prepare:assets && electron-forge make",
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck",
     "release:check": "npm run verify && npm run make"
