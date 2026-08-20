@@ -142,6 +142,29 @@ async function resolveTeamBranding(teamName: string): Promise<TeamBranding | nul
   return null;
 }
 
+async function loadRenderer(mainWindow: BrowserWindow): Promise<void> {
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    await mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    return;
+  }
+
+  // Resolve from the packaged application root instead of from __dirname.
+  // Electron Forge places the renderer bundle at .vite/renderer/main_window.
+  const rendererPath = path.join(app.getAppPath(), '.vite', 'renderer', 'main_window', 'index.html');
+
+  try {
+    await mainWindow.loadFile(rendererPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: 'CFB 27 Team Needs',
+      message: 'The application interface could not be loaded.',
+      detail: `Renderer path: ${rendererPath}\n\n${message}`,
+    });
+  }
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1280,
@@ -157,11 +180,7 @@ function createWindow(): void {
     },
   });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    void mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    void mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
-  }
+  void loadRenderer(mainWindow);
 }
 
 async function loadSave(filePath: string): Promise<TeamNeedsDynasty> {
