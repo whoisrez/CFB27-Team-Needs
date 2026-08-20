@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import started from 'electron-squirrel-startup';
@@ -22,6 +23,30 @@ type EspnTeamResponse = {
 };
 
 const teamBrandingCache = new Map<string, TeamBranding | null>();
+let pendingSyncPath: string | null = null;
+
+function lastSavePathFile(): string {
+  return path.join(app.getPath('userData'), 'last-dynasty-save.txt');
+}
+
+async function rememberLastSavePath(filePath: string): Promise<void> {
+  try {
+    await writeFile(lastSavePathFile(), filePath, 'utf8');
+  } catch {
+    // Sync convenience is optional; never fail an import because persistence failed.
+  }
+}
+
+async function readLastSavePath(): Promise<string | null> {
+  try {
+    const filePath = (await readFile(lastSavePathFile(), 'utf8')).trim();
+    if (!filePath) return null;
+    await access(filePath);
+    return filePath;
+  } catch {
+    return null;
+  }
+}
 
 function runSaveWorker<T>(request: WorkerRequest): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -143,9 +168,21 @@ async function loadSave(filePath: string): Promise<TeamNeedsDynasty> {
   return runSaveWorker<TeamNeedsDynasty>({ kind: 'load', filePath });
 }
 
+ipcMain.handle('team-needs:prepare-sync', async () => {
+  const filePath = await readLastSavePath();
+  pendingSyncPath = filePath;
+  return Boolean(filePath);
+});
+
 ipcMain.handle('team-needs:choose-and-load', async () => {
   const testSave = process.env.CFB27_TEST_DYNASTY_SAVE;
   if (testSave) return loadSave(testSave);
+
+  if (pendingSyncPath) {
+    const filePath = pendingSyncPath;
+    pendingSyncPath = null;
+    return loadSave(filePath);
+  }
 
   const defaultPath = path.join(app.getPath('documents'), 'EA SPORTS College Football 27', 'saves');
   const result = await dialog.showOpenDialog({
@@ -154,7 +191,11 @@ ipcMain.handle('team-needs:choose-and-load', async () => {
     properties: ['openFile'],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
-  return loadSave(result.filePaths[0]);
+
+  const filePath = result.filePaths[0];
+  const dynasty = await loadSave(filePath);
+  await rememberLastSavePath(filePath);
+  return dynasty;
 });
 
 ipcMain.handle('team-needs:team-branding', async (_event, teamName: unknown) => {
