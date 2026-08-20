@@ -38,6 +38,8 @@ The release build creates:
 - `out/portable/CFB 27 Team Needs/` — runnable portable app folder.
 - `out/make/portable/CFB-27-Team-Needs-Portable.zip` — release artifact for GitHub.
 
-Extract the ZIP wherever you want the tool to live, such as `CFB 27 Mods & Tools/Tools/`. Run `CFB 27 Team Needs.exe` from that folder. Packaged builds keep persistent app data in a `data` folder beside the executable instead of `%LOCALAPPDATA%`.
+The portable release has no hardcoded install location. Download the ZIP and extract the `CFB 27 Team Needs` folder to any writable location you choose, on any drive. Run `CFB 27 Team Needs.exe` from that folder.
+
+Packaged builds keep persistent app data in a `data` folder beside the executable instead of `%LOCALAPPDATA%`. If the entire `CFB 27 Team Needs` folder is moved to another writable location, the app and its portable data move together.
 
 See `RELEASE.md` for the portable-build acceptance checklist and publishing process. Release changes are tracked in `CHANGELOG.md`.
