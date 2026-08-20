@@ -6,10 +6,11 @@ Import a dynasty save and the app reads the Team + Player data needed to populat
 
 ## Download
 
-Use the repository's **Releases** page for normal Windows downloads:
+Use the repository's **Releases** page for the portable Windows download:
 
-- `CFB-27-Team-Needs-Setup.exe` — standard Windows installer.
-- `CFB-27-Team-Needs-Portable.zip` — portable version; extract the folder anywhere writable and run `CFB 27 Team Needs.exe`.
+- `CFB-27-Team-Needs-Portable.zip` — extract the `CFB 27 Team Needs` folder anywhere writable and run `CFB 27 Team Needs.exe` from inside that folder.
+
+There is intentionally no Windows installer. The portable release keeps its persistent `data` folder beside the executable so the whole app folder can be moved together without relying on an install path or `%LOCALAPPDATA%`.
 
 Windows may show a SmartScreen warning because the current release is not code-signed.
 
@@ -37,7 +38,7 @@ npm.cmd start
 
 ## Release builds
 
-Public releases are built on a Windows GitHub Actions runner after the version in `package.json` is changed and merged into `main`. The release workflow type-checks the project, builds the Windows installer and portable ZIP, verifies the portable output, and then creates the GitHub Release.
+Public releases are built on a Windows GitHub Actions runner after the version in `package.json` is changed and merged into `main`. The release workflow type-checks the project, builds and verifies the portable ZIP, and then creates or updates the GitHub Release with that ZIP as the only application download.
 
 For a local portable verification build:
 
