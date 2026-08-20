@@ -11,7 +11,8 @@
     "make": "electron-forge make",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck",
-    "release:check": "npm run verify && npm run make"
+    "release:verify-output": "node scripts/verify-release-output.cjs",
+    "release:check": "npm run verify && npm run make && npm run release:verify-output"
   },
   "author": "tyrez",
   "license": "MIT",
