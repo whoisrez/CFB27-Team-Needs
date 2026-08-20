@@ -1,6 +1,6 @@
 # Release Process
 
-CFB 27 Team Needs publishes Windows releases through GitHub Actions. Real-save acceptance testing should still be completed before bumping the public version.
+CFB 27 Team Needs publishes portable Windows releases through GitHub Actions. Real-save acceptance testing should still be completed before bumping the public version.
 
 ## Release candidate check
 
@@ -43,14 +43,18 @@ After the acceptance test passes:
 4. The `Publish Release` GitHub Actions workflow runs on Windows and:
    - installs dependencies;
    - runs the TypeScript verification;
-   - builds the Squirrel Windows installer;
-   - builds the portable ZIP;
+   - builds the portable application folder and ZIP;
    - runs release-output verification;
-   - creates the `vX.Y.Z` GitHub Release and attaches both downloads.
-5. Confirm the release contains `CFB-27-Team-Needs-Setup.exe` and `CFB-27-Team-Needs-Portable.zip`.
+   - creates or updates the `vX.Y.Z` GitHub Release;
+   - attaches only `CFB-27-Team-Needs-Portable.zip`.
+5. Confirm the release contains the portable ZIP and no installer asset.
 
-The workflow has `contents: write` only for publishing the release. A release is not created if the build or verification steps fail.
+The workflow has `contents: write` only for publishing the release. A release is not created or updated if the build or verification steps fail.
+
+## Why portable-only
+
+The portable release is intentional. It avoids installer-specific paths and keeps persistent app data in the `data` folder beside the executable instead of `%LOCALAPPDATA%`. Users can move the entire `CFB 27 Team Needs` folder to another writable location or drive and keep the application and its saved data together.
 
 ## Updating
 
-For each update, repeat real-save acceptance testing, update the changelog, bump the version, and merge the release change. Portable users can replace application files while keeping their `data` folder. Installer users can install the newer release normally.
+For each update, repeat real-save acceptance testing, update the changelog, bump the version, and merge the release change. Users update by replacing the application files with the newer portable release while keeping their `data` folder.
