@@ -1,20 +1,22 @@
 # Release Process
 
-CFB 27 Team Needs uses a local-first Windows release process. GitHub Actions remain manual-only.
+CFB 27 Team Needs uses a local-first portable Windows release process. GitHub Actions remain manual-only.
 
 ## Release candidate check
 
 1. Pull the current `main` branch.
 2. Install/update dependencies if needed with `npm.cmd install`.
 3. Run `npm.cmd run release:check`.
-4. Confirm the installer is created under `out/make/`.
-5. Install `CFB-27-Team-Needs-Setup.exe` on Windows.
+4. Confirm `out/portable/CFB 27 Team Needs/CFB 27 Team Needs.exe` exists.
+5. Confirm `out/make/portable/CFB-27-Team-Needs-Portable.zip` exists.
+6. Run the portable executable directly from the generated portable folder.
 
-## Installed-build acceptance test
+## Portable-build acceptance test
 
-Before publishing a release, verify the installed app with a real dynasty save:
+Before publishing a release, verify the portable app with a real dynasty save:
 
-- App launches from the Windows-installed shortcut/app entry.
+- App launches directly from the portable folder.
+- A `data` folder is created beside the executable instead of using `%LOCALAPPDATA%` for persistent app data.
 - Dynasty import succeeds.
 - Correct school is selected automatically or remembered correctly.
 - Roster and graduating counts are correct.
@@ -29,14 +31,14 @@ Before publishing a release, verify the installed app with a real dynasty save:
 
 ## Publishing
 
-After the installed build passes acceptance:
+After the portable build passes acceptance:
 
 1. Confirm `package.json` contains the intended version.
 2. Update `CHANGELOG.md`.
 3. Tag the accepted commit as `vX.Y.Z`.
 4. Create a GitHub Release from that tag.
-5. Attach `CFB-27-Team-Needs-Setup.exe` from the successful local build.
+5. Attach `CFB-27-Team-Needs-Portable.zip` from the successful local build.
 
 ## Updating
 
-For each update, repeat the same development, local verification, installed-build acceptance, version bump, and release process. Early releases intentionally use a fresh installer rather than an automatic updater.
+For each update, repeat the same development, local verification, portable-build acceptance, version bump, and release process. Users update by replacing the application files with the newer portable release while keeping the `data` folder.
