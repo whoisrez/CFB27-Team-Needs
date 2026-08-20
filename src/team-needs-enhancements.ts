@@ -108,7 +108,12 @@ function updateToggleState(button: HTMLButtonElement): void {
 function filterTeamSelectToUserTeams(): void {
   teamFilterQueued = false;
   const select = document.querySelector<HTMLSelectElement>('#teamSelect');
-  if (!select || select.disabled) return;
+  if (!select) return;
+
+  if (select.disabled) {
+    select.hidden = true;
+    return;
+  }
 
   const options = [...select.options];
   const userOptions = options.filter((option) => option.value && /\s•\sUser\s*$/i.test(option.textContent ?? ''));
@@ -121,6 +126,7 @@ function filterTeamSelectToUserTeams(): void {
     const placeholder = [...select.options].find((option) => !option.value);
     if (placeholder) placeholder.textContent = 'No user-controlled teams found';
     select.disabled = true;
+    select.hidden = false;
     return;
   }
 
@@ -129,6 +135,10 @@ function filterTeamSelectToUserTeams(): void {
     select.value = userOptions[0].value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
   }
+
+  // A selector adds no value when the dynasty has only one user-controlled team.
+  // Keep it available only for multi-user / multi-team dynasties.
+  select.hidden = userOptions.length === 1;
 }
 
 function scheduleTeamFilter(): void {
