@@ -1,0 +1,15 @@
+.panel-head {
+  min-height: 44px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.panel-head .eyebrow {
+  display: none;
+}
+
+.panel-head h2 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1;
+}
