@@ -118,16 +118,19 @@ function filterTeamSelectToUserTeams(): void {
   const options = [...select.options];
   const userOptions = options.filter((option) => option.value && /\s•\sUser\s*$/i.test(option.textContent ?? ''));
 
-  for (const option of options) {
-    if (option.value && !userOptions.includes(option)) option.remove();
-  }
-
   if (userOptions.length === 0) {
-    const placeholder = [...select.options].find((option) => !option.value);
-    if (placeholder) placeholder.textContent = 'No user-controlled teams found';
-    select.disabled = true;
+    // Some CFB 27 saves do not expose a reliable user-controlled flag. The
+    // reader has already loaded every valid roster, so keep those teams
+    // selectable instead of discarding them and making the app unusable.
+    const placeholder = options.find((option) => !option.value);
+    if (placeholder) placeholder.textContent = 'Select team…';
+    select.disabled = false;
     select.hidden = false;
     return;
+  }
+
+  for (const option of options) {
+    if (option.value && !userOptions.includes(option)) option.remove();
   }
 
   const selectedIsUserTeam = userOptions.some((option) => option.value === select.value);
