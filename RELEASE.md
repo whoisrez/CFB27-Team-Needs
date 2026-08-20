@@ -10,13 +10,16 @@ CFB 27 Team Needs uses a local-first portable Windows release process. GitHub Ac
 4. Confirm `out/portable/CFB 27 Team Needs/CFB 27 Team Needs.exe` exists.
 5. Confirm `out/make/portable/CFB-27-Team-Needs-Portable.zip` exists.
 6. Run the portable executable directly from the generated portable folder.
+7. Copy or extract the portable folder to a different writable location and confirm it runs there without any path-specific configuration.
 
 ## Portable-build acceptance test
 
 Before publishing a release, verify the portable app with a real dynasty save:
 
 - App launches directly from the portable folder.
+- The portable folder can be placed in any writable user-selected location or drive.
 - A `data` folder is created beside the executable instead of using `%LOCALAPPDATA%` for persistent app data.
+- Moving the whole portable folder keeps the app and its data together.
 - Dynasty import succeeds.
 - Correct school is selected automatically or remembered correctly.
 - Roster and graduating counts are correct.
