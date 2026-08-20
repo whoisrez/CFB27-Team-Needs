@@ -51,6 +51,8 @@ function installSyncButton(): void {
       const ready = await syncAPI.prepareSync();
       if (!ready) {
         showSyncError('Import a dynasty once first, or re-import it if the save file was moved.');
+        syncButton.disabled = false;
+        syncButton.textContent = 'Sync';
         return;
       }
 
