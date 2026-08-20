@@ -19,7 +19,7 @@ function runSaveWorker<T>(request: WorkerRequest): Promise<T> {
     };
     worker.once('message', (response: WorkerResponse<T>) => {
       finish();
-      if (response.ok) resolve(response.data);
+      if ('data' in response) resolve(response.data);
       else reject(new Error(response.error));
     });
     worker.once('error', (error) => {
