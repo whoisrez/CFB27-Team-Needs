@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..');
 const packagedDir = path.join(root, 'out', 'CFB 27 Team Needs-win32-x64');
 const portableRoot = path.join(root, 'out', 'portable');
 const portableAppDir = path.join(portableRoot, 'CFB 27 Team Needs');
+const portableDataDir = path.join(portableAppDir, 'data');
 const makeDir = path.join(root, 'out', 'make', 'portable');
 const zipPath = path.join(makeDir, 'CFB-27-Team-Needs-Portable.zip');
 
@@ -17,6 +18,10 @@ fs.rmSync(portableRoot, { recursive: true, force: true });
 fs.mkdirSync(portableAppDir, { recursive: true });
 fs.cpSync(packagedDir, portableAppDir, { recursive: true, force: true });
 
+// Never ship a previous user's portable data, even if it somehow exists in a
+// packaged source folder. A fresh data folder is created on first launch.
+fs.rmSync(portableDataDir, { recursive: true, force: true });
+
 fs.writeFileSync(
   path.join(portableAppDir, 'README.txt'),
   [
@@ -24,6 +29,7 @@ fs.writeFileSync(
     '',
     'Keep this entire folder together and run CFB 27 Team Needs.exe.',
     'The app stores its persistent settings in the data folder beside the executable.',
+    'The data folder is created automatically on first launch and is not included in the download.',
     'To move the app, move the whole CFB 27 Team Needs folder.',
     '',
   ].join('\r\n'),
