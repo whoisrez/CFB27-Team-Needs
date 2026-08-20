@@ -1,10 +1,14 @@
 # Changelog
 
-## Unreleased
+## v0.1.1
+
+Portable Windows release.
 
 ### Changed
-- Windows releases are now built as a portable app folder and ZIP instead of relying on the Squirrel installer.
-- Packaged builds store persistent app data in a `data` folder beside `CFB 27 Team Needs.exe` instead of `%LOCALAPPDATA%`.
+- Windows releases are now distributed as a portable app folder and ZIP instead of relying on the Squirrel installer.
+- The portable app can be extracted to any writable location and run directly from `CFB 27 Team Needs.exe`.
+- Packaged builds store persistent app data in a `data` folder beside the executable instead of `%LOCALAPPDATA%`.
+- Moving the entire portable folder moves the app and its saved local data together.
 - Release verification now checks the portable executable and ZIP output.
 
 ## v0.1.0
