@@ -21,6 +21,7 @@ const sections: readonly SectionDefinition[] = [
 
 let needsOnly = localStorage.getItem(NEEDS_ONLY_KEY) === 'true';
 let enhanceQueued = false;
+let teamFilterQueued = false;
 
 function showSyncError(message: string): void {
   const status = document.querySelector<HTMLElement>('#status');
@@ -104,6 +105,38 @@ function updateToggleState(button: HTMLButtonElement): void {
   button.classList.toggle('active', needsOnly);
 }
 
+function filterTeamSelectToUserTeams(): void {
+  teamFilterQueued = false;
+  const select = document.querySelector<HTMLSelectElement>('#teamSelect');
+  if (!select || select.disabled) return;
+
+  const options = [...select.options];
+  const userOptions = options.filter((option) => option.value && /\s•\sUser\s*$/i.test(option.textContent ?? ''));
+
+  for (const option of options) {
+    if (option.value && !userOptions.includes(option)) option.remove();
+  }
+
+  if (userOptions.length === 0) {
+    const placeholder = [...select.options].find((option) => !option.value);
+    if (placeholder) placeholder.textContent = 'No user-controlled teams found';
+    select.disabled = true;
+    return;
+  }
+
+  const selectedIsUserTeam = userOptions.some((option) => option.value === select.value);
+  if (!selectedIsUserTeam) {
+    select.value = userOptions[0].value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+}
+
+function scheduleTeamFilter(): void {
+  if (teamFilterQueued) return;
+  teamFilterQueued = true;
+  queueMicrotask(filterTeamSelectToUserTeams);
+}
+
 function ensureSectionDividers(): void {
   const body = document.querySelector<HTMLTableSectionElement>('#rows');
   if (!body) return;
@@ -161,10 +194,17 @@ function scheduleEnhance(): void {
 
 installSyncButton();
 installNeedsOnlyToggle();
+scheduleTeamFilter();
 scheduleEnhance();
 
 document.addEventListener('input', scheduleEnhance);
-document.querySelector('#teamSelect')?.addEventListener('change', scheduleEnhance);
+const teamSelect = document.querySelector('#teamSelect');
+teamSelect?.addEventListener('change', scheduleEnhance);
+
+if (teamSelect) {
+  const teamObserver = new MutationObserver(scheduleTeamFilter);
+  teamObserver.observe(teamSelect, { childList: true });
+}
 
 const rows = document.querySelector('#rows');
 if (rows) {
