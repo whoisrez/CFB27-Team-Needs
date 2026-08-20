@@ -1,0 +1,61 @@
+/* Keep the Team Needs screen focused on the information users act on. */
+.title-wrap .eyebrow,
+.subtitle,
+.team-brand-label,
+.status > span:last-child,
+.summary small,
+.panel-meta,
+.position-name small,
+.manual-wrap small,
+.need-result small,
+.footnote {
+  display: none !important;
+}
+
+.topbar {
+  min-height: 58px !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+}
+
+.topbar h1 {
+  margin: 0 !important;
+}
+
+.status {
+  min-height: 30px !important;
+  padding-top: 5px !important;
+  padding-bottom: 5px !important;
+}
+
+.summary article {
+  min-height: 64px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+.summary strong {
+  margin-top: 5px !important;
+}
+
+.panel-head {
+  min-height: 42px !important;
+}
+
+.needs-table th,
+.needs-table td {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.position-name strong {
+  line-height: 1.2 !important;
+}
+
+.manual-wrap {
+  gap: 0 !important;
+}
+
+.need-result strong {
+  margin: 0 !important;
+}
