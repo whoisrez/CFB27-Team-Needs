@@ -1,0 +1,95 @@
+.sync-button {
+  min-width: 72px !important;
+  padding-inline: 14px !important;
+}
+
+.sync-button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.panel-head > div:first-of-type {
+  flex: 1 1 auto;
+}
+
+.needs-only-toggle {
+  flex: 0 0 auto;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid #303030;
+  border-radius: 0;
+  background: #0c0c0c;
+  color: #8c8c88;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+
+.needs-only-toggle:hover {
+  border-color: #55514a;
+  color: #d6d6d1;
+  background: #121212;
+}
+
+.needs-only-toggle .toggle-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #5b5b56;
+  background: transparent;
+}
+
+.needs-only-toggle.active {
+  border-color: color-mix(in srgb, var(--team-accent-alt, #d9b15c) 60%, #303030);
+  color: #f0dfb7;
+  background: color-mix(in srgb, var(--team-accent-alt, #d9b15c) 8%, #0c0c0c);
+}
+
+.needs-only-toggle.active .toggle-dot {
+  border-color: var(--team-accent-alt, #d9b15c);
+  background: var(--team-accent-alt, #d9b15c);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--team-accent-alt, #d9b15c) 35%, transparent);
+}
+
+.needs-table tbody .roster-section-divider {
+  background: #0d0d0d !important;
+}
+
+.needs-table tbody .roster-section-divider:hover {
+  background: #0d0d0d !important;
+}
+
+.needs-table .roster-section-divider td,
+.needs-table .roster-section-divider td:first-child {
+  position: static !important;
+  min-width: 0 !important;
+  padding: 6px 15px !important;
+  border-bottom: 1px solid #262626 !important;
+  border-left: 3px solid var(--team-accent, #6f313b);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--team-accent, #6f313b) 13%, #0d0d0d), #0d0d0d 34%) !important;
+  box-shadow: none !important;
+  color: #92928d;
+  text-align: left !important;
+  font-size: 8px !important;
+  font-weight: 950;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.needs-filter-hidden {
+  display: none !important;
+}
+
+@media (max-width: 1150px) {
+  .sync-button {
+    min-width: 68px !important;
+  }
+
+  .needs-only-toggle {
+    padding-inline: 8px;
+  }
+}
