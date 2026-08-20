@@ -5,11 +5,14 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import { copyRuntimeDependencyTree } from './scripts/copy-runtime-deps';
 
+const releaseIcon = 'resources/app.ico';
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     name: 'CFB 27 Team Needs',
     executableName: 'CFB 27 Team Needs',
+    icon: releaseIcon,
     afterPrune: [
       (buildPath, _electronVersion, _platform, _arch, callback) => {
         try {
@@ -26,6 +29,7 @@ const config: ForgeConfig = {
     new MakerSquirrel({
       name: 'cfb27_team_needs',
       setupExe: 'CFB-27-Team-Needs-Setup.exe',
+      setupIcon: releaseIcon,
     }),
   ],
   plugins: [
