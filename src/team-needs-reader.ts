@@ -40,11 +40,13 @@ type FranchiseRecordLike = Record<string, unknown> & {
   fields?: Record<string, FranchiseReferenceFieldLike>;
   fieldsArray?: FranchiseReferenceFieldLike[];
 };
+
 type FranchiseTableLike = {
   header: { recordCapacity: number; tableId?: number };
   records: FranchiseRecordLike[];
   readRecords: (attributes?: string[]) => Promise<void>;
 };
+
 type FranchiseLike = {
   getAllTablesByName: (name: string) => FranchiseTableLike[];
   getTableById: (id: number) => FranchiseTableLike;
@@ -175,26 +177,22 @@ function isCommittedRecruitStage(value: unknown): boolean {
   return stage === 'softcommitted' || stage === 'hardcommitted' || stage === 'signed';
 }
 
-async function committedRecruitPosition(
+async function recruitCommittedToTeam(
   franchise: FranchiseLike,
   recruit: FranchiseRecordLike,
   teamIndex: number,
   readTables: Set<FranchiseTableLike>,
-): Promise<string | null> {
-  if (!isCommittedRecruitStage(recruit.RecruitStage)) return null;
-
+): Promise<boolean> {
   const topSchools = await referencedRecord(franchise, referenceData(recruit, 'TopSchoolsList'), readTables);
-  if (!topSchools) return null;
+  if (!topSchools) return false;
 
-  const topSchoolRef = recordReferenceFields(topSchools)
+  // TopSchoolsList is ordered by school rank. The first valid reference is the
+  // recruit's current #1 school; resolve it and compare its stable TeamId.
+  const firstSchoolRef = recordReferenceFields(topSchools)
     .map(validReference)
     .find((ref): ref is ReferenceData => ref != null);
-  const topSchool = await referencedRecord(franchise, topSchoolRef ?? null, readTables);
-  if (!topSchool || Number(topSchool.TeamId) !== teamIndex) return null;
-
-  const player = await referencedRecord(franchise, referenceData(recruit, 'Player'), readTables);
-  const position = String(player?.Position ?? '').trim();
-  return position || null;
+  const firstSchool = await referencedRecord(franchise, firstSchoolRef ?? null, readTables);
+  return Boolean(firstSchool && Number(firstSchool.TeamId) === teamIndex);
 }
 
 async function readCommittedRecruitsForTeam(
@@ -202,37 +200,33 @@ async function readCommittedRecruitsForTeam(
   teamIndex: number,
   readTables: Set<FranchiseTableLike>,
 ): Promise<{ recruits: TeamNeedsRecruit[]; recruitingAuto: boolean }> {
-  const targetArrays = optionalLargestTable(franchise, 'RecruitTarget[]');
-  const targetTable = optionalLargestTable(franchise, 'RecruitTarget');
-  if (!targetArrays || !targetTable) return { recruits: [], recruitingAuto: false };
+  const recruitTable = optionalLargestTable(franchise, 'Recruit');
+  if (!recruitTable) return { recruits: [], recruitingAuto: false };
 
   try {
-    await ensureRead(targetArrays, readTables);
-    await ensureRead(targetTable, readTables);
-    const board = targetArrays.records[teamIndex];
-    if (!board || board.isEmpty) return { recruits: [], recruitingAuto: false };
-
-    const targetTableId = Number(targetTable.header.tableId ?? 0);
+    await ensureRead(recruitTable, readTables);
     const recruits: TeamNeedsRecruit[] = [];
-    for (const field of recordReferenceFields(board)) {
-      const ref = validReference(field);
-      if (!ref) continue;
-      if (targetTableId && ref.tableId !== targetTableId) continue;
 
-      const target = targetTable.records[ref.rowNumber];
-      if (!target || target.isEmpty) continue;
-      const recruit = await referencedRecord(franchise, referenceData(target, 'Recruit'), readTables);
-      if (!recruit) continue;
+    // Do not use the user's RecruitTarget[] board to count commits. The user
+    // board can contain references outside the normal RecruitTarget table and
+    // board ownership differs across saves. The Recruit record itself is the
+    // authoritative commitment state, and TopSchoolsList identifies the school.
+    for (const recruit of nonEmpty(recruitTable.records)) {
+      if (!isCommittedRecruitStage(recruit.RecruitStage)) continue;
+      if (!(await recruitCommittedToTeam(franchise, recruit, teamIndex, readTables))) continue;
 
-      const position = await committedRecruitPosition(franchise, recruit, teamIndex, readTables);
+      const player = await referencedRecord(franchise, referenceData(recruit, 'Player'), readTables);
+      const position = String(player?.Position ?? '').trim();
       if (!position) continue;
-      recruits.push({ position, recruitStage: String(recruit.RecruitStage ?? '').trim() });
+
+      recruits.push({
+        position,
+        recruitStage: String(recruit.RecruitStage ?? '').trim(),
+      });
     }
 
     return { recruits, recruitingAuto: true };
   } catch {
-    // Recruiting tables have changed across CFB 27 updates. Roster planning must
-    // still work if these tables cannot be resolved, so fall back to manual input.
     return { recruits: [], recruitingAuto: false };
   }
 }
@@ -243,8 +237,6 @@ async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<
 
   for (const table of coachTables) {
     try {
-      // This is only a compatibility fallback for saves where Team.UserCharacter
-      // is unavailable. Coach metadata can be stale after a coaching change.
       await table.readRecords();
       for (const record of nonEmpty(table.records)) {
         if (!appearsUserControlled(record)) continue;
@@ -252,9 +244,7 @@ async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<
         if (teamIndex != null) userTeams.add(teamIndex);
       }
     } catch {
-      // Some CFB 27 updates change the Coach schema. Team Needs does not depend
-      // on that table, so failure here simply falls back to Team flags, save-name
-      // matching, and the user's remembered selection.
+      // Team.UserCharacter remains the primary signal.
     }
   }
 
@@ -284,8 +274,6 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     if (index != null && hasUserCharacterReference(record)) userCharacterTeams.add(index);
   }
 
-  // Team.UserCharacter is CFB 27's authoritative current human-team signal.
-  // Only consult older heuristics when no usable UserCharacter reference exists.
   const coachUserTeams = userCharacterTeams.size === 0
     ? await userControlledTeamIndices(franchise)
     : new Set<number>();
@@ -304,8 +292,9 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     playersByTeam.set(index, roster);
   }
 
+  const detectedUserTeams = userCharacterTeams.size > 0 ? userCharacterTeams : coachUserTeams;
   const recruitingByTeam = new Map<number, { recruits: TeamNeedsRecruit[]; recruitingAuto: boolean }>();
-  for (const index of userCharacterTeams) {
+  for (const index of detectedUserTeams) {
     recruitingByTeam.set(index, await readCommittedRecruitsForTeam(franchise, index, readTables));
   }
 
@@ -315,18 +304,26 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     const name = teamName(record);
     const roster = playersByTeam.get(index) ?? [];
     if (!Number.isFinite(index) || !name || roster.length === 0) continue;
-    const recruiting = recruitingByTeam.get(index) ?? { recruits: [], recruitingAuto: false };
+
+    const isUserControlled = userCharacterTeams.size > 0
+      ? userCharacterTeams.has(index)
+      : appearsUserControlled(record)
+        || coachUserTeams.has(index)
+        || saveNameMatchesTeam(filePath, name);
+
+    let recruiting = recruitingByTeam.get(index);
+    if (!recruiting && isUserControlled) {
+      recruiting = await readCommittedRecruitsForTeam(franchise, index, readTables);
+      recruitingByTeam.set(index, recruiting);
+    }
+
     teams.push({
       teamName: name,
       teamIndex: index,
-      isUserControlled: userCharacterTeams.size > 0
-        ? userCharacterTeams.has(index)
-        : appearsUserControlled(record)
-          || coachUserTeams.has(index)
-          || saveNameMatchesTeam(filePath, name),
+      isUserControlled,
       roster,
-      recruits: recruiting.recruits,
-      recruitingAuto: recruiting.recruitingAuto,
+      recruits: recruiting?.recruits ?? [],
+      recruitingAuto: recruiting?.recruitingAuto ?? false,
     });
   }
 
