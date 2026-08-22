@@ -7,7 +7,15 @@ import {
 import './styles.css';
 
 type TeamNeedsPlayer = { position: string; schoolYear: string; redshirtStatus: string };
-type TeamNeedsTeam = { teamName: string; teamIndex: number; isUserControlled: boolean; roster: TeamNeedsPlayer[] };
+type TeamNeedsRecruit = { position: string; recruitStage: string };
+type TeamNeedsTeam = {
+  teamName: string;
+  teamIndex: number;
+  isUserControlled: boolean;
+  roster: TeamNeedsPlayer[];
+  recruits: TeamNeedsRecruit[];
+  recruitingAuto: boolean;
+};
 type TeamNeedsDynasty = { filePath: string; teams: TeamNeedsTeam[] };
 
 declare global {
@@ -127,7 +135,7 @@ root.innerHTML = `
         <tbody id="rows"></tbody>
       </table></div>
     </section>
-    <p class="footnote"><b>Roster-safe departures:</b> Transferring + Projected Draft + Being Cut can never exceed the non-graduating players available in that position group. Use Projected Draft for draft-eligible underclassmen you expect to leave, such as juniors or redshirt sophomores. LG + RG count as OG, LT + RT as OT, LE + RE as EDGE, and SAM + WILL as SAM/WILL.</p>
+    <p class="footnote"><b>Roster-safe departures:</b> Transferring + Projected Draft + Being Cut can never exceed the non-graduating players available in that position group. Use Projected Draft for draft-eligible underclassmen you expect to leave, such as juniors or redshirt sophomores. When a valid CFB 27 recruiting board is available, committed recruits auto-populate from the save; otherwise Recruited remains manual. LG + RG count as OG, LT + RT as OT, LE + RE as EDGE, and SAM + WILL as SAM/WILL.</p>
   </div>`;
 
 const importButton = document.querySelector<HTMLButtonElement>('#importButton')!;
@@ -163,7 +171,10 @@ function updateStatus(): void {
     return;
   }
   status.classList.remove('error');
-  status.innerHTML = `<span><strong>${escapeHtml(team.teamName)} loaded.</strong> ${team.roster.length} players read from the save.</span><span>Manual values save per team.</span>`;
+  const recruitingStatus = team.recruitingAuto
+    ? `${team.recruits.length} committed recruits auto-read.`
+    : 'Recruited remains manual for this save.';
+  status.innerHTML = `<span><strong>${escapeHtml(team.teamName)} loaded.</strong> ${team.roster.length} players read from the save.</span><span>${recruitingStatus}</span>`;
 }
 
 function render(): void {
@@ -191,7 +202,9 @@ function render(): void {
       manual.projectedDraft,
       manual.beingCut,
     );
-    const recruited = manual.recruited;
+    const recruited = team.recruitingAuto
+      ? team.recruits.filter((recruit) => group.positions.includes(displayPosition(recruit.position))).length
+      : manual.recruited;
     const available = availableTeamNeedsDepartures(players.length, graduating);
     const stillNeeded = calculateTeamNeedsStillNeeded(
       group.target,
@@ -227,7 +240,7 @@ function render(): void {
     <article><span>Roster</span><strong>${team.roster.length} / ${ROSTER_TARGET_TOTAL}</strong><small>Current / target</small></article>
     <article><span>Graduating</span><strong>${totalGraduating}</strong><small>Projected departures</small></article>
     <article><span>Projected Returning</span><strong id="projectedReturning">${projectedReturning}</strong><small>After manual departures</small></article>
-    <article><span>Still Needed</span><strong id="totalStillNeeded">${totalStillNeeded}</strong><small><span id="recruitedSummary">${totalRecruited}</span> recruited</small></article>`;
+    <article><span>Still Needed</span><strong id="totalStillNeeded">${totalStillNeeded}</strong><small><span id="recruitedSummary">${totalRecruited}</span> recruited${team.recruitingAuto ? ' • auto' : ''}</small></article>`;
   meta.textContent = `${team.teamName} • ${team.roster.length} on roster • ${projectedReturning} projected returning`;
 
   rows.innerHTML = values.map((row) => {
@@ -244,7 +257,7 @@ function render(): void {
       <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="${maxProjectedDraft}" step="1" data-manual-field="projectedDraft" value="${row.projectedDraft}" aria-label="${escapeHtml(row.group.key)} projected draft"></div></td>
       <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="${maxBeingCut}" step="1" data-manual-field="beingCut" value="${row.beingCut}" aria-label="${escapeHtml(row.group.key)} being cut"></div></td>
       <td><span class="target">${row.group.target}</span></td>
-      <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="85" step="1" data-manual-field="recruited" value="${row.recruited}" aria-label="${escapeHtml(row.group.key)} recruited"></div></td>
+      <td><div class="manual-wrap"><input class="manual" type="number" min="0" max="85" step="1" data-manual-field="recruited" value="${row.recruited}" aria-label="${escapeHtml(row.group.key)} recruited"${team.recruitingAuto ? ' readonly' : ''}>${team.recruitingAuto ? '<small>auto</small>' : ''}</div></td>
       <td><div class="need-result"><strong class="still-needed ${needClass}">${row.stillNeeded}</strong><small>${statusText}</small></div></td>
     </tr>`;
   }).join('') + `<tr class="total-row"><td><strong>Total</strong></td><td><strong>${team.roster.length}</strong></td><td><strong>${totalGraduating}</strong></td><td><strong id="totalTransferring">${totalTransferring}</strong></td><td><strong id="totalProjectedDraft">${totalProjectedDraft}</strong></td><td><strong id="totalBeingCut">${totalBeingCut}</strong></td><td><strong>${ROSTER_TARGET_TOTAL}</strong></td><td><strong id="totalRecruited">${totalRecruited}</strong></td><td><strong id="totalNeedCell">${totalStillNeeded}</strong></td></tr>`;
@@ -324,7 +337,7 @@ function refreshRow(row: HTMLTableRowElement): void {
   saveManual(groupKey, 'transferring', normalized.transferring);
   saveManual(groupKey, 'projectedDraft', normalized.projectedDraft);
   saveManual(groupKey, 'beingCut', normalized.beingCut);
-  saveManual(groupKey, 'recruited', recruited);
+  if (!recruitedInput.readOnly) saveManual(groupKey, 'recruited', recruited);
 
   const stillNeeded = calculateTeamNeedsStillNeeded(
     target,
@@ -347,7 +360,7 @@ function refreshRow(row: HTMLTableRowElement): void {
 
 rows.addEventListener('input', (event) => {
   const input = event.target as HTMLInputElement;
-  if (!input.matches('input[data-manual-field]')) return;
+  if (!input.matches('input[data-manual-field]') || input.readOnly) return;
   const row = input.closest<HTMLTableRowElement>('tr[data-target-group]');
   if (row) refreshRow(row);
 });
@@ -367,7 +380,7 @@ importButton.addEventListener('click', async () => {
   importButton.disabled = true;
   importButton.textContent = 'Loading…';
   status.classList.remove('error');
-  status.innerHTML = '<span><strong>Reading dynasty save…</strong> Loading Team and Player tables only.</span><span>This can take a moment.</span>';
+  status.innerHTML = '<span><strong>Reading dynasty save…</strong> Loading roster and recruiting tables.</span><span>This can take a moment.</span>';
   try {
     const loaded = await window.teamNeedsAPI.chooseAndLoad();
     if (!loaded) {

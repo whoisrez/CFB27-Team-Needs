@@ -7,11 +7,18 @@ export type TeamNeedsPlayer = {
   redshirtStatus: string;
 };
 
+export type TeamNeedsRecruit = {
+  position: string;
+  recruitStage: string;
+};
+
 export type TeamNeedsTeam = {
   teamName: string;
   teamIndex: number;
   isUserControlled: boolean;
   roster: TeamNeedsPlayer[];
+  recruits: TeamNeedsRecruit[];
+  recruitingAuto: boolean;
 };
 
 export type TeamNeedsDynasty = {
@@ -20,6 +27,7 @@ export type TeamNeedsDynasty = {
 };
 
 type FranchiseReferenceFieldLike = {
+  key?: string;
   isReference?: boolean;
   referenceData?: {
     tableId?: number;
@@ -30,19 +38,34 @@ type FranchiseReferenceFieldLike = {
 type FranchiseRecordLike = Record<string, unknown> & {
   isEmpty?: boolean;
   fields?: Record<string, FranchiseReferenceFieldLike>;
+  fieldsArray?: FranchiseReferenceFieldLike[];
 };
+
 type FranchiseTableLike = {
-  header: { recordCapacity: number };
+  header: { recordCapacity: number; tableId?: number };
   records: FranchiseRecordLike[];
   readRecords: (attributes?: string[]) => Promise<void>;
 };
+
 type FranchiseLike = {
   getAllTablesByName: (name: string) => FranchiseTableLike[];
+  getTableById: (id: number) => FranchiseTableLike;
+};
+
+type ReferenceData = {
+  tableId: number;
+  rowNumber: number;
 };
 
 function largestTable(franchise: FranchiseLike, name: string): FranchiseTableLike {
   const tables = franchise.getAllTablesByName(name);
   if (!tables || tables.length === 0) throw new Error(`No table found named "${name}".`);
+  return tables.reduce((largest, table) => table.header.recordCapacity > largest.header.recordCapacity ? table : largest);
+}
+
+function optionalLargestTable(franchise: FranchiseLike, name: string): FranchiseTableLike | null {
+  const tables = franchise.getAllTablesByName(name) ?? [];
+  if (tables.length === 0) return null;
   return tables.reduce((largest, table) => table.header.recordCapacity > largest.header.recordCapacity ? table : largest);
 }
 
@@ -105,14 +128,115 @@ function recordTeamIndex(record: FranchiseRecordLike): number | null {
   return null;
 }
 
+function referenceData(record: FranchiseRecordLike, key: string): ReferenceData | null {
+  const field = record.fields?.[key];
+  if (!field?.isReference) return null;
+  const tableId = Number(field.referenceData?.tableId ?? 0);
+  const rowNumber = Number(field.referenceData?.rowNumber ?? -1);
+  if (!Number.isFinite(tableId) || tableId === 0 || !Number.isFinite(rowNumber) || rowNumber < 0) return null;
+  return { tableId, rowNumber };
+}
+
+function recordReferenceFields(record: FranchiseRecordLike): FranchiseReferenceFieldLike[] {
+  return record.fieldsArray ?? Object.values(record.fields ?? {});
+}
+
+function validReference(field: FranchiseReferenceFieldLike): ReferenceData | null {
+  if (!field?.isReference) return null;
+  const tableId = Number(field.referenceData?.tableId ?? 0);
+  const rowNumber = Number(field.referenceData?.rowNumber ?? -1);
+  if (!Number.isFinite(tableId) || tableId === 0 || !Number.isFinite(rowNumber) || rowNumber < 0) return null;
+  return { tableId, rowNumber };
+}
+
+async function ensureRead(table: FranchiseTableLike, readTables: Set<FranchiseTableLike>): Promise<void> {
+  if (readTables.has(table)) return;
+  await table.readRecords();
+  readTables.add(table);
+}
+
+async function referencedRecord(
+  franchise: FranchiseLike,
+  ref: ReferenceData | null,
+  readTables: Set<FranchiseTableLike>,
+): Promise<FranchiseRecordLike | null> {
+  if (!ref) return null;
+  try {
+    const table = franchise.getTableById(ref.tableId);
+    if (!table) return null;
+    await ensureRead(table, readTables);
+    const record = table.records[ref.rowNumber];
+    return record && !record.isEmpty ? record : null;
+  } catch {
+    return null;
+  }
+}
+
+function isCommittedRecruitStage(value: unknown): boolean {
+  const stage = normalizeKey(String(value ?? ''));
+  return stage === 'softcommitted' || stage === 'hardcommitted' || stage === 'signed';
+}
+
+async function recruitCommittedToTeam(
+  franchise: FranchiseLike,
+  recruit: FranchiseRecordLike,
+  teamIndex: number,
+  readTables: Set<FranchiseTableLike>,
+): Promise<boolean> {
+  const topSchools = await referencedRecord(franchise, referenceData(recruit, 'TopSchoolsList'), readTables);
+  if (!topSchools) return false;
+
+  // TopSchoolsList is ordered by school rank. The first valid reference is the
+  // recruit's current #1 school; resolve it and compare its stable TeamId.
+  const firstSchoolRef = recordReferenceFields(topSchools)
+    .map(validReference)
+    .find((ref): ref is ReferenceData => ref != null);
+  const firstSchool = await referencedRecord(franchise, firstSchoolRef ?? null, readTables);
+  return Boolean(firstSchool && Number(firstSchool.TeamId) === teamIndex);
+}
+
+async function readCommittedRecruitsForTeam(
+  franchise: FranchiseLike,
+  teamIndex: number,
+  readTables: Set<FranchiseTableLike>,
+): Promise<{ recruits: TeamNeedsRecruit[]; recruitingAuto: boolean }> {
+  const recruitTable = optionalLargestTable(franchise, 'Recruit');
+  if (!recruitTable) return { recruits: [], recruitingAuto: false };
+
+  try {
+    await ensureRead(recruitTable, readTables);
+    const recruits: TeamNeedsRecruit[] = [];
+
+    // Do not use the user's RecruitTarget[] board to count commits. The user
+    // board can contain references outside the normal RecruitTarget table and
+    // board ownership differs across saves. The Recruit record itself is the
+    // authoritative commitment state, and TopSchoolsList identifies the school.
+    for (const recruit of nonEmpty(recruitTable.records)) {
+      if (!isCommittedRecruitStage(recruit.RecruitStage)) continue;
+      if (!(await recruitCommittedToTeam(franchise, recruit, teamIndex, readTables))) continue;
+
+      const player = await referencedRecord(franchise, referenceData(recruit, 'Player'), readTables);
+      const position = String(player?.Position ?? '').trim();
+      if (!position) continue;
+
+      recruits.push({
+        position,
+        recruitStage: String(recruit.RecruitStage ?? '').trim(),
+      });
+    }
+
+    return { recruits, recruitingAuto: true };
+  } catch {
+    return { recruits: [], recruitingAuto: false };
+  }
+}
+
 async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<number>> {
   const userTeams = new Set<number>();
   const coachTables = franchise.getAllTablesByName('Coach') ?? [];
 
   for (const table of coachTables) {
     try {
-      // This is only a compatibility fallback for saves where Team.UserCharacter
-      // is unavailable. Coach metadata can be stale after a coaching change.
       await table.readRecords();
       for (const record of nonEmpty(table.records)) {
         if (!appearsUserControlled(record)) continue;
@@ -120,9 +244,7 @@ async function userControlledTeamIndices(franchise: FranchiseLike): Promise<Set<
         if (teamIndex != null) userTeams.add(teamIndex);
       }
     } catch {
-      // Some CFB 27 updates change the Coach schema. Team Needs does not depend
-      // on that table, so failure here simply falls back to Team flags, save-name
-      // matching, and the user's remembered selection.
+      // Team.UserCharacter remains the primary signal.
     }
   }
 
@@ -143,6 +265,7 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
   const playerTable = largestTable(franchise, 'Player');
   await teamTable.readRecords();
   await playerTable.readRecords();
+  const readTables = new Set<FranchiseTableLike>([teamTable, playerTable]);
 
   const teamRecords = nonEmpty(teamTable.records);
   const userCharacterTeams = new Set<number>();
@@ -151,8 +274,6 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     if (index != null && hasUserCharacterReference(record)) userCharacterTeams.add(index);
   }
 
-  // Team.UserCharacter is CFB 27's authoritative current human-team signal.
-  // Only consult older heuristics when no usable UserCharacter reference exists.
   const coachUserTeams = userCharacterTeams.size === 0
     ? await userControlledTeamIndices(franchise)
     : new Set<number>();
@@ -171,21 +292,38 @@ export async function loadTeamNeedsDynasty(filePath: string): Promise<TeamNeedsD
     playersByTeam.set(index, roster);
   }
 
+  const detectedUserTeams = userCharacterTeams.size > 0 ? userCharacterTeams : coachUserTeams;
+  const recruitingByTeam = new Map<number, { recruits: TeamNeedsRecruit[]; recruitingAuto: boolean }>();
+  for (const index of detectedUserTeams) {
+    recruitingByTeam.set(index, await readCommittedRecruitsForTeam(franchise, index, readTables));
+  }
+
   const teams: TeamNeedsTeam[] = [];
   for (const record of teamRecords) {
     const index = Number(record.TeamIndex);
     const name = teamName(record);
     const roster = playersByTeam.get(index) ?? [];
     if (!Number.isFinite(index) || !name || roster.length === 0) continue;
+
+    const isUserControlled = userCharacterTeams.size > 0
+      ? userCharacterTeams.has(index)
+      : appearsUserControlled(record)
+        || coachUserTeams.has(index)
+        || saveNameMatchesTeam(filePath, name);
+
+    let recruiting = recruitingByTeam.get(index);
+    if (!recruiting && isUserControlled) {
+      recruiting = await readCommittedRecruitsForTeam(franchise, index, readTables);
+      recruitingByTeam.set(index, recruiting);
+    }
+
     teams.push({
       teamName: name,
       teamIndex: index,
-      isUserControlled: userCharacterTeams.size > 0
-        ? userCharacterTeams.has(index)
-        : appearsUserControlled(record)
-          || coachUserTeams.has(index)
-          || saveNameMatchesTeam(filePath, name),
+      isUserControlled,
       roster,
+      recruits: recruiting?.recruits ?? [],
+      recruitingAuto: recruiting?.recruitingAuto ?? false,
     });
   }
 
