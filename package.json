@@ -1,7 +1,7 @@
 {
   "name": "cfb27-team-needs",
   "productName": "CFB 27 Team Needs",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Standalone CFB 27 roster planning and Team Needs utility",
   "main": ".vite/build/main.js",
   "private": true,
