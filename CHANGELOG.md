@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.4
+
+Automatic recruiting update.
+
+### Added
+- Automatically reads committed recruits from CFB 27 dynasty saves for the controlled team.
+- Counts SoftCommitted, HardCommitted, and Signed recruits together in the Recruited total.
+- Resolves each committed recruit's linked player position and maps it into the Team Needs position groups.
+- Recruited cells display automatic counts when recruiting data is available in the save.
+
+### Changed
+- Sync now refreshes committed-recruit counts from the dynasty save and recalculates Still Needed automatically.
+- Manual Recruited input remains available as a fallback when recruiting data cannot be resolved.
+- Public distribution remains portable-only through `CFB-27-Team-Needs-Portable.zip`.
+
 ## v0.1.3
 
 Projected draft planning update.
